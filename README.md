@@ -1,1 +1,1 @@
-# mysql-generator
+# mysql-query-generator
