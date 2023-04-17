@@ -17,8 +17,10 @@ export namespace Data {
   interface WhereCondition {
     column?: string;
     table?: string;
+    targetTable?: string;
     raw?: string;
     value?: any;
+    rawValue?: any;
   }
   interface OrderByCondition {
     column: string;
@@ -30,7 +32,7 @@ export namespace Data {
     pageSize: number;
   }
   interface JoinOption {
-    on: WhereConditionInput;
+    on: InputData.WhereConditions;
     type?: "LEFT" | "RIGHT";
     table: Table["name"];
     tableAlias?: Table["alias"];

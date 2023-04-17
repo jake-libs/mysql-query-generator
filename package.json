@@ -11,14 +11,14 @@
   "nodemon": {},
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jake-packages/mysql-query-generator.git"
+    "url": "git+https://github.com/jake-libs/mysql-query-generator.git"
   },
   "author": "LinZhengDe",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/jake-packages/mysql-query-generator/issues"
+    "url": "https://github.com/jake-libs/mysql-query-generator/issues"
   },
-  "homepage": "https://github.com/jake-packages/mysql-query-generator#readme",
+  "homepage": "https://github.com/jake-libs/mysql-query-generator#readme",
   "devDependencies": {
     "nodemon": "^2.0.22",
     "ts-node": "^10.9.1",

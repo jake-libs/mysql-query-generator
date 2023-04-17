@@ -37,7 +37,7 @@ class MysqlQueryGenerator implements MysqlQueryGeneratorInstance {
     return cache.defaultTableName;
   }
 
-  select(columns: InputData.SelectColumns) {
+  select(columns: InputData.SelectColumns, defaultTable?: string) {
     if (!columns) return this;
     if (!(columns instanceof Array)) {
       columns = [columns];
@@ -50,9 +50,10 @@ class MysqlQueryGenerator implements MysqlQueryGeneratorInstance {
       if (typeof column === "string") {
         selectColumnMap.set(column, {
           name: column,
+          table: defaultTable,
         });
       } else if (column.name || column.raw) {
-        selectColumnMap.set(column.name || Symbol(), column);
+        selectColumnMap.set(column.name || Symbol(), Object.assign({ table: defaultTable }, column));
       }
     }
 
@@ -128,7 +129,7 @@ class MysqlQueryGenerator implements MysqlQueryGeneratorInstance {
     const joinOptions = this[Keys.JoinOptions];
     for (const option of options) {
       if (!option || !option.table || !option.on) continue;
-      option.on = this[Keys.Parser].resolveConditionsInput(option.on);
+      option.on = this[Keys.Parser].resolveConditionsInput(option.on, option.table);
       if (!option.on.length) continue;
 
       this.setTable({ name: option.table, alias: option.tableAlias });
@@ -189,7 +190,7 @@ class MysqlQueryGenerator implements MysqlQueryGeneratorInstance {
 
   [Keys.ParseSelect]() {
     const toSqlParser = this[Keys.Parser].toSql;
-    const sql = "SELECT <columns> <tables> <whereConditions> <joinOptions> <orderByConditions> <limitOption>";
+    const sql = "SELECT <columns> <tables> <joinOptions> <whereConditions> <orderByConditions> <limitOption>";
     return sql
       .replace("<columns>", toSqlParser.selectColumns(this[Keys.SelectColumns]))
       .replace("<tables>", toSqlParser.fromTables(this[Keys.FromTables]))

@@ -22,7 +22,8 @@ function useParser(getTable: (name: string) => Data.Table | undefined, getDefaul
 
       const { column } = condition;
       const table = tableParser.getName(condition.table);
-      const value = condition.value || `:${column}`;
+      const targetTable = condition.targetTable && tableParser.getName(condition.targetTable);
+      const value = condition.rawValue || `${targetTable ? `${targetTable}.` : ":"}${condition.value || column}`;
       return `${table}.${column} = ${value}`;
     }, []);
     return sql.join(` ${separator} `);
@@ -30,9 +31,8 @@ function useParser(getTable: (name: string) => Data.Table | undefined, getDefaul
   return {
     table: tableParser,
     toSql: {
-
       selectColumns(columns: SqlParser.SelectColumns) {
-        const parseSql = (column:Data.SelectColumn) => {
+        const parseSql = (column: Data.SelectColumn) => {
           if (column.raw) return column.raw;
           const { name, alias } = column;
           if (!name) return;
@@ -77,7 +77,7 @@ function useParser(getTable: (name: string) => Data.Table | undefined, getDefaul
       joinOptions(options: SqlParser.JoinOptions) {
         return options.reduce((sql, option) => {
           const { type = "LEFT", table, tableAlias, on } = option;
-          sql += `\n${type} JOIN ${table}${tableAlias ? `AS ${tableAlias}` : ""} ON ${resolveConditionsToSql(on)}`;
+          sql += `\n${type} JOIN ${table}${tableAlias ? ` AS ${tableAlias}` : ""} ON ${resolveConditionsToSql(on as SqlParser.WhereConditions)}`;
           return sql;
         }, "");
       },
@@ -108,7 +108,7 @@ function useParser(getTable: (name: string) => Data.Table | undefined, getDefaul
       },
     },
 
-    resolveConditionsInput(conditions: InputData.WhereConditions): SqlParser.WhereConditions {
+    resolveConditionsInput(conditions: InputData.WhereConditions, defaultTable?: string): SqlParser.WhereConditions {
       if (!conditions) return [];
       if (!(conditions instanceof Array)) {
         conditions = [conditions];
@@ -117,9 +117,9 @@ function useParser(getTable: (name: string) => Data.Table | undefined, getDefaul
       return conditions.reduce<SqlParser.WhereConditions>((arr, condition) => {
         if (!condition) return arr;
         if (typeof condition === "string") {
-          arr.push({ column: condition });
+          arr.push({ column: condition, table: defaultTable });
         } else if (condition.column || condition.raw) {
-          arr.push(condition);
+          arr.push(Object.assign({ table: defaultTable }, condition));
         }
         return arr;
       }, []);
@@ -128,10 +128,9 @@ function useParser(getTable: (name: string) => Data.Table | undefined, getDefaul
   };
 }
 
-
 useParser.getTableAliasedName = function (table: Data.Table) {
   return table.alias ? table.alias : table.name;
 };
 
-export type UseParser = ReturnType<typeof useParser>
+export type UseParser = ReturnType<typeof useParser>;
 export default useParser;
