@@ -1,0 +1,29 @@
+{
+  "name": "mysql-query-generator",
+  "version": "0.0.0",
+  "description": "用來生成mysql語句的產生器",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "test",
+    "dev": "nodemon src/test.ts",
+    "build": "vite build"
+  },
+  "nodemon": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jake-packages/mysql-query-generator.git"
+  },
+  "author": "LinZhengDe",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jake-packages/mysql-query-generator/issues"
+  },
+  "homepage": "https://github.com/jake-packages/mysql-query-generator#readme",
+  "devDependencies": {
+    "nodemon": "^2.0.22",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.4",
+    "vite": "^4.2.1"
+  },
+  "dependencies": {}
+}
