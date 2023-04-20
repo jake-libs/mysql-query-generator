@@ -5,23 +5,31 @@ import { UseParser } from "../src/parser";
 export namespace Data {
   interface Table {
     name: string;
-    alias?: string;
+    as?: string;
   }
   interface SelectColumn {
-    name?: string;
+    column?: string;
     table?: string;
-    alias?: string;
+    as?: string;
     raw?: string;
   }
   type FromTable = Table;
-  interface WhereCondition {
-    column?: string;
+  // interface WhereCondition {
+  //   column?: string;
+  //   table?: string;
+  //   operator?:string;
+  //   targetTable?: string;
+  //   value?: any;
+  //   raw?: string;
+  //   rawValue?: any;
+  // }
+  interface WhereConditionField {
     table?: string;
-    targetTable?: string;
+    column?: string;
     raw?: string;
-    value?: any;
-    rawValue?: any;
   }
+  type WhereCondition = [WhereConditionField, (string | -1)?, (WhereConditionField | -1)?];
+  // type WhereCondition
   interface OrderByCondition {
     column: string;
     direction?: "desc" | "asc" | "DESC" | "ASC";
@@ -32,10 +40,10 @@ export namespace Data {
     pageSize: number;
   }
   interface JoinOption {
-    on: InputData.WhereConditions;
+    on: SqlParser.WhereConditions;
     type?: "LEFT" | "RIGHT";
     table: Table["name"];
-    tableAlias?: Table["alias"];
+    as?: Table["alias"];
   }
   type UpdateColumn = WhereCondition;
   type InsertColumn = string;
@@ -45,9 +53,15 @@ export namespace InputData {
   type Table = Data.Table | string;
   type SelectColumns = string | Data.SelectColumn | Array<Data.SelectColumn | string>;
   type FromTables = string | Data.FromTable | Array<Data.FromTable | string>;
-  type WhereConditions = string | Data.WhereCondition | Array<string | Data.WhereCondition>;
+
+  type WhereConditionField = string | Data.WhereConditionField;
+  type WhereCondition = [InputData.WhereConditionField, string?, InputData.WhereConditionField?] | [InputData.WhereConditionField, InputData.WhereConditionField?];
+  type WhereConditions = InputData.WhereCondition | Array<InputData.WhereCondition>;
   type OrderByConditions = string | Data.OrderByCondition | Array<string | Data.OrderByCondition>;
-  type JoinOptions = Data.JoinOption | Data.JoinOption[];
+  interface JoinOption extends Data.JoinOption {
+    on: InputData.WhereConditions;
+  }
+  type JoinOptions = JoinOption | JoinOption[];
   type LimitOption = Data.LimitOption;
   type UpdateColumns = InputData.WhereConditions | Record<string, any>;
   type InsertColumns = Data.InsertColumn[] | Record<string, any>;
@@ -83,7 +97,7 @@ export interface MysqlQueryGeneratorInstance {
 
   readonly defaultTableName: string;
 
-  setTable(table: Data.Table): void;
+  _setTable(table: Data.Table): void;
   select(columns: InputData.SelectColumns): this;
   from(tables: InputData.FromTables): this;
   where(conditions: InputData.WhereConditions): this;

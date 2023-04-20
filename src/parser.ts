@@ -9,22 +9,57 @@ function useParser(getTable: (name: string) => Data.Table | undefined, getDefaul
     },
     getName(table?: Data.Table | string) {
       if (typeof table === "string") {
-        return this.getNameFromTable(getTable(table));
+        return table;
       }
-      return this.getNameFromTable(table);
+      return getDefaultTableName();
     },
   };
   function resolveConditionsToSql(conditions: SqlParser.WhereConditions, separator = "AND") {
+    function getConditionField(condition: Data.WhereCondition) {
+      if (condition.length === 3) {
+        return {
+          start: condition[0],
+          operator: condition[1] || "=",
+          end: condition[2],
+        };
+      } else if (condition.length === 2) {
+        return {
+          start: condition[0],
+          operator: "=",
+          end: condition[1],
+        };
+      }
+      return {
+        start: condition[0],
+        operator: "=",
+      };
+    }
+
+    function parseStartCondition(condition: Data.WhereCondition["0"]) {
+      if (condition.raw) return condition.raw;
+
+      const table = tableParser.getName(condition.table);
+      return `${table}.${condition.column}`;
+    }
+
+    function parseEndCondition(end: Data.WhereCondition["2"], start: Data.WhereCondition["0"]) {
+      if (end === -1) return "";
+      if (!end) return `:${start.column}`;
+      if (end.raw) return end.raw;
+
+      const table = tableParser.getName(end.table);
+      return `${table}.${end.column}`;
+    }
+
     const sql = conditions.map((condition) => {
-      if (condition.raw) {
-        return condition.raw;
+      const { start, end, operator: conditionSeparator } = getConditionField(condition);
+      if (typeof end === "string") {
+        return;
       }
 
-      const { column } = condition;
-      const table = tableParser.getName(condition.table);
-      const targetTable = condition.targetTable && tableParser.getName(condition.targetTable);
-      const value = condition.rawValue || `${targetTable ? `${targetTable}.` : ":"}${condition.value || column}`;
-      return `${table}.${column} = ${value}`;
+      const startSql = parseStartCondition(start);
+      const endSql = parseEndCondition(end, start);
+      return conditionSeparator === -1 ? startSql : `${startSql} ${conditionSeparator} ${endSql}`;
     }, []);
     return sql.join(` ${separator} `);
   }
@@ -32,12 +67,12 @@ function useParser(getTable: (name: string) => Data.Table | undefined, getDefaul
     table: tableParser,
     toSql: {
       selectColumns(columns: SqlParser.SelectColumns) {
-        const parseSql = (column: Data.SelectColumn) => {
-          if (column.raw) return column.raw;
-          const { name, alias } = column;
-          if (!name) return;
-          const table = tableParser.getName(column.table);
-          return `${table}.${name}${alias ? ` AS ${alias}` : ""}`;
+        const parseSql = (selectColumn: Data.SelectColumn) => {
+          if (selectColumn.raw) return selectColumn.raw;
+          const { column, as } = selectColumn;
+          if (!column) return;
+          const table = tableParser.getName(selectColumn.table);
+          return `${table}.${column}${as ? ` AS ${as}` : ""}`;
         };
 
         const sqlArray = [];
@@ -55,7 +90,7 @@ function useParser(getTable: (name: string) => Data.Table | undefined, getDefaul
       tables(tables: SqlParser.FromTables) {
         return tables
           .map((table) => {
-            return `${table.name}${table.alias ? ` AS ${table.alias}` : ""}`;
+            return `${table.name}${table.as ? ` AS ${table.as}` : ""}`;
           })
           .join(", ");
       },
@@ -76,8 +111,8 @@ function useParser(getTable: (name: string) => Data.Table | undefined, getDefaul
 
       joinOptions(options: SqlParser.JoinOptions) {
         return options.reduce((sql, option) => {
-          const { type = "LEFT", table, tableAlias, on } = option;
-          sql += `\n${type} JOIN ${table}${tableAlias ? ` AS ${tableAlias}` : ""} ON ${resolveConditionsToSql(on as SqlParser.WhereConditions)}`;
+          const { type = "LEFT", table, as, on } = option;
+          sql += `\n${type} JOIN ${table}${as ? ` AS ${as}` : ""} ON ${resolveConditionsToSql(on as SqlParser.WhereConditions)}`;
           return sql;
         }, "");
       },
@@ -108,19 +143,58 @@ function useParser(getTable: (name: string) => Data.Table | undefined, getDefaul
       },
     },
 
-    resolveConditionsInput(conditions: InputData.WhereConditions, defaultTable?: string): SqlParser.WhereConditions {
-      if (!conditions) return [];
-      if (!(conditions instanceof Array)) {
-        conditions = [conditions];
+    resolveConditionsInput(
+      conditions: InputData.WhereConditions,
+      { defaultTable, rawStringToRaw = false }: { defaultTable?: string; rawStringToRaw?: boolean } = {}
+    ): SqlParser.WhereConditions {
+      if (!conditions || !(conditions instanceof Array)){
+        throw new TypeError("Conditions must be an array or an array of conditions, your value: "+conditions)
+      }
+      if (!(conditions[0] instanceof Array)) {
+        conditions = [conditions] as Array<InputData.WhereCondition>;
       }
 
-      return conditions.reduce<SqlParser.WhereConditions>((arr, condition) => {
-        if (!condition) return arr;
-        if (typeof condition === "string") {
-          arr.push({ column: condition, table: defaultTable });
-        } else if (condition.column || condition.raw) {
-          arr.push(Object.assign({ table: defaultTable }, condition));
+      const stringToConditionField = (() => {
+        if (rawStringToRaw) {
+          return (condition: string) => {
+            return { raw: condition };
+          };
         }
+        return (condition: string) => {
+          return { column: condition, table: defaultTable };
+        };
+      })();
+
+      function resolveConditionField(condition: InputData.WhereConditionField): Data.WhereConditionField {
+        if (typeof condition === "string") {
+          return stringToConditionField(condition);
+        }
+        if (condition.raw) {
+          return condition;
+        }
+        if (!condition.column) {
+          throw new TypeError("Condition field must be string or with 「column」 column");
+        }
+        return Object.assign({ table: defaultTable }, condition);
+      }
+
+      return (<Array<InputData.WhereCondition>>conditions).reduce<SqlParser.WhereConditions>((arr, condition) => {
+        if (!condition) return arr;
+        // if (typeof condition === "string") {
+        //   if (rawStringToRaw) {
+        //     return arr.push([stringToConditionField(condition), -1, -1]), arr;
+        //   }
+        //   condition = [stringToConditionField(condition)];
+        // }
+
+        // console.log('condition :>> ', condition);
+        condition[0] = resolveConditionField(condition[0]);
+        if (condition[2]) condition[2] = resolveConditionField(condition[2]);
+        else if (condition[1]) {
+          condition[1] = resolveConditionField(condition[1]);
+        }
+
+        arr.push(condition as Data.WhereCondition);
         return arr;
       }, []);
     },
@@ -129,7 +203,7 @@ function useParser(getTable: (name: string) => Data.Table | undefined, getDefaul
 }
 
 useParser.getTableAliasedName = function (table: Data.Table) {
-  return table.alias ? table.alias : table.name;
+  return table.as ? table.as : table.name;
 };
 
 export type UseParser = ReturnType<typeof useParser>;

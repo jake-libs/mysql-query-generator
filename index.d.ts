@@ -31,7 +31,7 @@ export class MysqlQueryGenerator implements MysqlQueryGeneratorInstance {
   execute(type?: MysqlQueryGeneratorType | undefined): string;
   get defaultTableName(): string;
 
-  setTable(table: Data.Table): void;
+  _setTable(table: Data.Table): void;
   [Keys.ParseSelect](): string;
   [Keys.ParseInsert](): string;
   [Keys.ParseUpdate](): string;

@@ -37,6 +37,13 @@ class MysqlQueryGenerator implements MysqlQueryGeneratorInstance {
     return cache.defaultTableName;
   }
 
+  /**
+   * @param columns - [col, col, col...] OR col
+   * @param defaultTable 將會覆蓋本次select中非raw並且col沒有指定table的欄位
+   * @returns 
+   * @example select("col") = select({column:"col"}) -> "table.col"
+   * @example select({column:"col", table:"manager"}) -> "manager.col"
+   */
   select(columns: InputData.SelectColumns, defaultTable?: string) {
     if (!columns) return this;
     if (!(columns instanceof Array)) {
@@ -49,11 +56,11 @@ class MysqlQueryGenerator implements MysqlQueryGeneratorInstance {
       if (!column) continue;
       if (typeof column === "string") {
         selectColumnMap.set(column, {
-          name: column,
+          column: column,
           table: defaultTable,
         });
-      } else if (column.name || column.raw) {
-        selectColumnMap.set(column.name || Symbol(), Object.assign({ table: defaultTable }, column));
+      } else if (column.column || column.raw) {
+        selectColumnMap.set(column.column || Symbol(), Object.assign({ table: defaultTable }, column));
       }
     }
 
@@ -61,10 +68,20 @@ class MysqlQueryGenerator implements MysqlQueryGeneratorInstance {
     return this;
   }
 
-  setTable(table: Data.Table) {
+  _setTable(table: Data.Table) {
     this[Keys.Tables].set(table.name, table);
   }
 
+  /**
+   * 預設會From constructor的table
+   * @param tables 
+   * @returns 
+   * 
+   * @example from("manager") -> "FROM <basicTable>, manager"
+   * @example from({name:"manager", as:"m"}) -> "FROM <basicTable>, manager AS m"
+   * 
+   * 
+   */
   from(tables: InputData.FromTables) {
     if (!tables) return this;
     if (!(tables instanceof Array)) {
@@ -76,10 +93,10 @@ class MysqlQueryGenerator implements MysqlQueryGeneratorInstance {
       if (!table) continue;
       if (typeof table === "string") {
         fromTables.push({ name: table });
-        this.setTable({ name: table });
+        this._setTable({ name: table });
       } else if (table.name) {
         fromTables.push(table);
-        this.setTable(table);
+        this._setTable(table);
       }
     }
 
@@ -87,16 +104,29 @@ class MysqlQueryGenerator implements MysqlQueryGeneratorInstance {
     return this;
   }
 
+  /**
+   *
+   * @param conditions
+   * @example where("id") = where({ column: "id" }) -> "WHERE table.id = :id"
+   * @example where(['name', 'email']) -> "WHERE manager.name = :name AND manager.email = :email"
+   * @example from("user").where({ column: "id", table: "user" }) -> "WHERE user.id = :id"
+   * @example from("user").where({ column: "id", targetTable: "user" }) -> "WHERE manager.id = user.id"
+   * @example from("user").where({ column: "id", targetTable: "user", operator: ">=" }) -> "WHERE manager.id >= user.id"
+   * @example where({ raw:"xxx = xxx"}) -> "WHERE xxx = xxx"
+   * @example where({ column: "id", rawValue: "abc.id" }) -> "WHERE manager.id = abc.id"
+   * @returns
+   */
   where(conditions: InputData.WhereConditions) {
-    if (!conditions) return this;
-    if (!(conditions instanceof Array)) {
-      conditions = [conditions];
-    }
-
     const whereConditions = this[Keys.WhereConditions];
     whereConditions.push(...this[Keys.Parser].resolveConditionsInput(conditions));
 
     // console.log("conditions :>> ", whereConditions);
+    return this;
+  }
+
+  whereRaw(conditions: InputData.WhereConditions) {
+    const whereConditions = this[Keys.WhereConditions];
+    whereConditions.push(...this[Keys.Parser].resolveConditionsInput(conditions, { rawStringToRaw: true }));
     return this;
   }
 
@@ -129,11 +159,11 @@ class MysqlQueryGenerator implements MysqlQueryGeneratorInstance {
     const joinOptions = this[Keys.JoinOptions];
     for (const option of options) {
       if (!option || !option.table || !option.on) continue;
-      option.on = this[Keys.Parser].resolveConditionsInput(option.on, option.table);
-      if (!option.on.length) continue;
+      const joinOnOptions = this[Keys.Parser].resolveConditionsInput(option.on, { defaultTable: option.as || option.table }) as SqlParser.WhereConditions;
+      if (!joinOnOptions.length) continue;
 
-      this.setTable({ name: option.table, alias: option.tableAlias });
-      joinOptions.push(option);
+      this._setTable({ name: option.table, as: option.as });
+      joinOptions.push(Object.assign(option, { on: joinOnOptions }));
     }
 
     return this;
@@ -147,24 +177,24 @@ class MysqlQueryGenerator implements MysqlQueryGeneratorInstance {
 
   /**
    *
-   * @param columns
-   * @param isData
-   * @returns
+   * @param columns 跟where一樣用法
+   * @param isData 如果值為true，表示啟用columns 為資料，將會取columns的key自動填入欄位
+   * @returns 
+   * @example .updateColumns({ name: "name", email: "email", }, true) -> "SET table.name = :name , table.email = :email"
+   * @example .updateColumns(['name']) -> "SET ot.name = :name"
+  )
    */
   updateColumns(columns: InputData.UpdateColumns, isData = false) {
     if (!columns) return this;
     const updateColumns = this[Keys.UpdateColumns];
     if (isData) {
       Object.keys(columns).forEach((key) => {
-        updateColumns.push({
+        updateColumns.push([{
           column: key,
-        });
+        }]);
       });
     } else {
-      if (!(columns instanceof Array)) {
-        columns = [columns];
-      }
-      updateColumns.push(...this[Keys.Parser].resolveConditionsInput(columns));
+      updateColumns.push(...this[Keys.Parser].resolveConditionsInput(columns as InputData.WhereConditions));
     }
     return this;
   }
@@ -174,6 +204,8 @@ class MysqlQueryGenerator implements MysqlQueryGeneratorInstance {
    * @param columns
    * @param length
    * @returns
+   * @example insertColumns({ a: 1, b: 2, c: 3 }, 3) -> ""
+   * INSERT INTO table_name(a, b, c) VALUES(:a, :b, :c), VALUES(:a, :b, :c), VALUES(:a, :b, :c)
    */
   insertColumns(columns: InputData.InsertColumns, length = 1) {
     if (!(columns instanceof Array)) {
@@ -213,7 +245,7 @@ class MysqlQueryGenerator implements MysqlQueryGeneratorInstance {
     const sql = "INSERT INTO <tables> <columns> <values>";
     const insertColumns = this[Keys.InsertColumns];
     return sql
-      .replace("<tables>", toSqlParser.tables(this[Keys.FromTables]))
+      .replace("<tables>", this[Keys.Tables].values().next().value)
       .replace("<columns>", toSqlParser.insertColumns(insertColumns))
       .replace("<values>", toSqlParser.insertColumnValues(insertColumns));
   }
@@ -253,7 +285,7 @@ class MysqlQueryGenerator implements MysqlQueryGeneratorInstance {
     }
 
     const sql = ParserMap[type]();
-    console.log("sql :>> ", sql);
+    console.log("sql :>> \n", sql);
     this.resetAll();
     return sql;
   }

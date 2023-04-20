@@ -1,59 +1,61 @@
 import MysqlQueryGenerator from ".";
 
-const tool = new MysqlQueryGenerator({ name: "order_ticket", alias: "ot" });
+const tool = new MysqlQueryGenerator({ name: "order_ticket", as: "ot" });
 console.log("-----------------select-----------------");
-tool
-  .select([{ name: "*", table: "shows" }])
-  .select([{ name: "id", table: "show_event", alias: "se_id" }])
-  .select([{ name: "id", alias: "sl_id" }, "location", "location_en"], "show_location")
-  .select([{ raw: "concat(c.name, town.name, sl.address) full_address" }, "start_time", "end_time"], "show_event")
-  // .join([
-  //   { table: "show_event_ticket", on: { column: "id", targetTable: "order_ticket", value: "t_id" } },
-  //   { table: "show_event", on: { column: "s_id", targetTable: "show_event_ticket", value: "id" } },
-  //   { table: "shows", on: { column: "id", targetTable: "show_event", value: "id" } },
-  //   { table: "show_location", on: { column: "id", targetTable: "show_event", value: "sl_id" } },
-  //   { table: "city", on: { column: "id", targetTable: "show_location", value: "city" } },
-  //   { table: "town", on: { column: "id", targetTable: "show_location", value: "town" } },
-  // ])
-  .join([{ table: "show_event_ticket", tableAlias: "t", on: { raw: "t.id = ot.t_id" } }])
-  // .join()
-  .where("o_id")
-  .execute();
+// tool.where
+// tool.where("name").execute(); // name = :name
+// tool.where(["name", "email"]).execute(); // name = :name AND email = :email
+// tool.where([["name", "=", "email"], "email"]).execute(); // name =
+// tool
+//   .from("user")
+//   .where([[{ column: "name", table: "user" }, "=", "email"], "email"])
+//   .execute();
+// tool
+//   .from("user")
+//   .where([[{ column: "name", table: "user" }, "name"], "email"])
+//   .execute();
+
+// tool.from("user").whereRaw("u.name = manager.name").execute();
+// tool
+//   .from("table2")
+//   .select([{ column: "*", table: "s" }])
+//   .select([{ column: "id", table: "se", as: "se_id" }])
+//   .select([{ column: "id", as: "sl_id" }, "location", "location_en"], "sl")
+//   .select([{ raw: "concat(c.name, town.name, sl.address) full_address" }, "start_time", "end_time"], "se")
+//   .join([
+//     { table: "show_event_ticket", as: "t", on: [[{ column: "id", table: "ot" }, "t_id"]] },
+//     { table: "show_event", as: "se", on: ["s1", "s2", "s3"] },
+//     { table: "shows", as: "s", on: [[{ column: "id", table: "se" }, "id"]] },
+//     { table: "show_location", as: "sl", on: [[{ column: "id", table: "se" }, "sl_id"]] },
+//     { table: "city", as: "c", on: [[{ column: "id", table: "sl" }, "city"]] },
+//     { table: "town", on: [[{ column: "id", table: "sl" }, "town"]] },
+//   ])
+//   .where("id")
+//   .execute();
 console.log("-----------------select-end-----------------");
 
 // *update
 console.log("-----------------update-----------------");
+// tool.updateColumns(["name"]).execute("update");
 // tool
+//   .from({ name: "user", as: "u" })
+//   .updateColumns(["id"])
 //   .updateColumns(
 //     {
-//       a: 1,
-//       b: 2,
-//       c: 3,
+//       name: "林政德",
+//       email: "email",
 //     },
 //     true
 //   )
-//   .execute("update");
-// tool
-//   .from({ name: "user", alias: "u" })
-//   .updateColumns({
-//     column: "id",
-//     table: "user",
-//   })
-//   .updateColumns({
-//     name: "林政德",
-//     email: "email",
-//   })
-//   .updateColumns({
-//     raw: "u.name = (select * from other_table)",
-//   })
+//   .updateColumns(["u.name = (select * from other_table)"])
 //   .where(["id", "token"])
 //   .execute("update");
 console.log("-----------------update-end-----------------");
 
 // *create
 console.log("-----------------create-----------------");
-// tool.insertColumns({ a: 1, b: 2, c: 3 }, 3).execute("insert");
-// tool.insertColumns(["name", "email"]).execute("insert");
+tool.insertColumns({ a: 1, b: 2, c: 3 }, 3).execute("insert");
+tool.insertColumns(["name", "email"]).execute("insert");
 console.log("-----------------create-end-----------------");
 
 // *delete
